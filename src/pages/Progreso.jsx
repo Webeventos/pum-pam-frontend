@@ -11,14 +11,29 @@ function clasificarTarea(tarea) {
 	if (tarea.estado === 'HECHO') return 'hecho';
 	if (fecha < hoy) return 'vencida';
 	if (fecha.getTime() === hoy.getTime()) return 'paraHoy';
+	if (tarea.estado === 'POSPUESTO') return 'pospuesta';
 	return 'proxima';
 }
 
+// Nueva fecha al posponer: un día después de la fecha actual, pero nunca antes de mañana.
+function fechaPospuesta(tarea) {
+	const manana = new Date();
+	manana.setHours(0, 0, 0, 0);
+	manana.setDate(manana.getDate() + 1);
+	const siguiente = new Date(tarea.fecha_asignada + 'T00:00:00');
+	siguiente.setDate(siguiente.getDate() + 1);
+	const nueva = siguiente > manana ? siguiente : manana;
+	const mm = String(nueva.getMonth() + 1).padStart(2, '0');
+	const dd = String(nueva.getDate()).padStart(2, '0');
+	return `${nueva.getFullYear()}-${mm}-${dd}`;
+}
+
 const BADGE = {
-	vencida:  { label: 'VENCIDA',   cls: 'badge-vencida' },
-	paraHoy:  { label: 'PARA HOY',  cls: 'badge-hoy' },
-	proxima:  { label: 'PENDIENTE', cls: 'badge-proxima' },
-	hecho:    { label: 'HECHO',     cls: 'badge-hecho' },
+	vencida:   { label: 'VENCIDA',    cls: 'badge-vencida' },
+	paraHoy:   { label: 'PARA HOY',   cls: 'badge-hoy' },
+	proxima:   { label: 'PENDIENTE',  cls: 'badge-proxima' },
+	pospuesta: { label: 'POSPUESTA',  cls: 'badge-pospuesto' },
+	hecho:     { label: 'HECHO',      cls: 'badge-hecho' },
 };
 
 function TareaFila({ tarea, onAccion }) {
@@ -36,7 +51,7 @@ function TareaFila({ tarea, onAccion }) {
 			{tipo !== 'hecho' && (
 				<div className="prog-tarea-actions">
 					<button className="prog-action prog-action-icon prog-action-primary" onClick={() => onAccion(tarea.id, 'HECHO')} title={`Marcar «${tarea.titulo}» como completada`}>✓</button>
-					<button className="prog-action prog-action-icon" onClick={() => onAccion(tarea.id, 'POSPUESTO')} title={`Posponer «${tarea.titulo}»`}>↷</button>
+					<button className="prog-action prog-action-icon" onClick={() => onAccion(tarea.id, { estado: 'POSPUESTO', fecha_asignada: fechaPospuesta(tarea) })} title={`Posponer «${tarea.titulo}» al día siguiente`}>↷</button>
 				</div>
 			)}
 		</div>
@@ -133,19 +148,26 @@ export default function Progreso() {
 
 	useEffect(() => { cargar(); }, [cargar]);
 
-	async function handleAccion(tareaId, nuevoEstado) {
+	async function handleAccion(tareaId, cambios) {
+		const cuerpo = typeof cambios === 'string' ? { estado: cambios } : cambios;
 		try {
 			const csrfRes = await fetch(`${API}/api/auth/csrf/`, { credentials: 'include' });
 			const { csrfToken } = await csrfRes.json();
-			await fetch(`${API}/api/tareas/${tareaId}/`, {
+			const res = await fetch(`${API}/api/tareas/${tareaId}/`, {
 				method: 'PATCH',
 				credentials: 'include',
 				headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-				body: JSON.stringify({ estado: nuevoEstado }),
+				body: JSON.stringify(cuerpo),
 			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => ({}));
+				const detalle = data.non_field_errors?.[0] || data.detail || Object.values(data)[0];
+				throw new Error(Array.isArray(detalle) ? detalle[0] : detalle || 'No se pudo actualizar la tarea.');
+			}
+			setError('');
 			cargar();
-		} catch {
-			setError('No se pudo actualizar la tarea.');
+		} catch (e) {
+			setError(e instanceof TypeError ? 'No se pudo actualizar la tarea.' : e.message);
 		}
 	}
 

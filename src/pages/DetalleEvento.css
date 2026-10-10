@@ -259,3 +259,10 @@ select.det-input { cursor: pointer; }
   .det-tarea { flex-wrap: wrap; }
   .det-titulo { font-size: 28px; }
 }
+
+/* ── Confirmación de nueva tarea ── */
+.det-confirm { margin-top: 14px; padding: 14px 16px; border-radius: 8px; font-size: 13px; line-height: 1.5; }
+.det-confirm p { margin: 0 0 12px; }
+.det-confirm-ok { color: #1f4d38; background: #eef5eb; border: 1px solid #c8d9c2; }
+.det-confirm-warn { color: #7a3b12; background: #fdf3e6; border: 1px solid #f0cfa4; }
+.det-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
