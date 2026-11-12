@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import './Progreso.css';
+import '../pages/Hoy.css';
+import LogoutButton from '../LogoutButton';
 
 const API = 'http://127.0.0.1:8000';
 
@@ -9,31 +11,18 @@ function clasificarTarea(tarea) {
 	hoy.setHours(0, 0, 0, 0);
 	const fecha = new Date(tarea.fecha_asignada + 'T00:00:00');
 	if (tarea.estado === 'HECHO') return 'hecho';
+	if (tarea.estado === 'POSPUESTO') return 'pospuesto';
 	if (fecha < hoy) return 'vencida';
 	if (fecha.getTime() === hoy.getTime()) return 'paraHoy';
-	if (tarea.estado === 'POSPUESTO') return 'pospuesta';
 	return 'proxima';
 }
 
-// Nueva fecha al posponer: un día después de la fecha actual, pero nunca antes de mañana.
-function fechaPospuesta(tarea) {
-	const manana = new Date();
-	manana.setHours(0, 0, 0, 0);
-	manana.setDate(manana.getDate() + 1);
-	const siguiente = new Date(tarea.fecha_asignada + 'T00:00:00');
-	siguiente.setDate(siguiente.getDate() + 1);
-	const nueva = siguiente > manana ? siguiente : manana;
-	const mm = String(nueva.getMonth() + 1).padStart(2, '0');
-	const dd = String(nueva.getDate()).padStart(2, '0');
-	return `${nueva.getFullYear()}-${mm}-${dd}`;
-}
-
 const BADGE = {
-	vencida:   { label: 'VENCIDA',    cls: 'badge-vencida' },
-	paraHoy:   { label: 'PARA HOY',   cls: 'badge-hoy' },
-	proxima:   { label: 'PENDIENTE',  cls: 'badge-proxima' },
-	pospuesta: { label: 'POSPUESTA',  cls: 'badge-pospuesto' },
-	hecho:     { label: 'HECHO',      cls: 'badge-hecho' },
+	vencida:  { label: 'VENCIDA',   cls: 'badge-vencida' },
+	paraHoy:  { label: 'PARA HOY',  cls: 'badge-hoy' },
+	proxima:  { label: 'PENDIENTE', cls: 'badge-proxima' },
+	hecho:    { label: 'HECHO',     cls: 'badge-hecho' },
+	pospuesto:{ label: 'POSPUESTO', cls: 'badge-pospuesto' },
 };
 
 function TareaFila({ tarea, onAccion }) {
@@ -46,12 +35,19 @@ function TareaFila({ tarea, onAccion }) {
 				<span className="prog-tarea-meta">
 					{tarea.fecha_asignada}{tarea.hora_asignada && ` · ${tarea.hora_asignada.slice(0, 5)}`} · {tarea.horas_estimadas}h
 				</span>
+				{tarea.estado === 'POSPUESTO' && tarea.note && (
+					<span className="prog-tarea-nota">Motivo: {tarea.note}</span>
+				)}
 			</div>
 			<span className={`prog-badge ${cls}`}>{label}</span>
 			{tipo !== 'hecho' && (
 				<div className="prog-tarea-actions">
 					<button className="prog-action prog-action-icon prog-action-primary" onClick={() => onAccion(tarea.id, 'HECHO')} title={`Marcar «${tarea.titulo}» como completada`}>✓</button>
-					<button className="prog-action prog-action-icon" onClick={() => onAccion(tarea.id, { estado: 'POSPUESTO', fecha_asignada: fechaPospuesta(tarea) })} title={`Posponer «${tarea.titulo}» al día siguiente`}>↷</button>
+					{tarea.estado === 'POSPUESTO' ? (
+						<button className="prog-action prog-action-icon" onClick={() => onAccion(tarea.id, 'EN_PROGRESO')} title={`Reanudar «${tarea.titulo}»`}>↻</button>
+					) : (
+						<button className="prog-action prog-action-icon" onClick={() => onAccion(tarea.id, 'POSPUESTO')} title={`Posponer «${tarea.titulo}»`}>↷</button>
+					)}
 				</div>
 			)}
 		</div>
@@ -66,6 +62,7 @@ function EventoCard({ evento, onAccion, onEliminar }) {
   // Determinar estado general del evento
   const tieneVencidas = pendientes.some(t => clasificarTarea(t) === 'vencida');
   const tieneHoy = pendientes.some(t => clasificarTarea(t) === 'paraHoy');
+	const tienePospuestas = pendientes.some(t => clasificarTarea(t) === 'pospuesto');
 
   return (
     <article className="prog-evento-card">
@@ -80,25 +77,31 @@ function EventoCard({ evento, onAccion, onEliminar }) {
             {tareas.length > 0 && ` · ${porcentaje}% completado`}
           </p>
         </div>
-        <div className="prog-evento-actions">
-		  <button className="prog-action prog-action-delete" onClick={() => onEliminar(evento.id)} title={`Eliminar «${evento.nombre}» y todas sus subtareas`}>
-            ✕
-          </button>
-        </div>
         <div className="prog-evento-badges">
           {tieneVencidas && <span className="prog-badge badge-vencida">VENCIDAS</span>}
           {tieneHoy && <span className="prog-badge badge-hoy">PARA HOY</span>}
-          {!tieneVencidas && !tieneHoy && tareas.length > 0 && (
+		  {tienePospuestas && <span className="prog-badge badge-pospuesto">POSPUESTAS</span>}
+		  {!tieneVencidas && !tieneHoy && !tienePospuestas && tareas.length > 0 && (
             <span className="prog-badge badge-proxima">AL DÍA</span>
           )}
           {tareas.length === 0 && (
             <span className="prog-badge badge-sin-tareas">SIN TAREAS</span>
           )}
+					<button
+						aria-label={`Eliminar «${evento.nombre}» y todas sus subtareas`}
+						className="prog-action prog-action-icon prog-action-delete"
+						onClick={() => onEliminar(evento.id)}
+						title={`Eliminar «${evento.nombre}» y todas sus subtareas`}
+						type="button"
+					>
+						<span aria-hidden="true">🗑</span>
+					</button>
         </div>
       </div>
 
       {tareas.length > 0 && (
         <>
+					<p className="prog-barra-label">Progreso del evento</p>
           <div className="prog-barra-wrap">
             <div className="prog-barra">
               <div className="prog-barra-fill" style={{ width: `${porcentaje}%` }} />
@@ -148,26 +151,20 @@ export default function Progreso() {
 
 	useEffect(() => { cargar(); }, [cargar]);
 
-	async function handleAccion(tareaId, cambios) {
-		const cuerpo = typeof cambios === 'string' ? { estado: cambios } : cambios;
+	async function handleAccion(tareaId, nuevoEstado) {
 		try {
 			const csrfRes = await fetch(`${API}/api/auth/csrf/`, { credentials: 'include' });
 			const { csrfToken } = await csrfRes.json();
-			const res = await fetch(`${API}/api/tareas/${tareaId}/`, {
+			const response = await fetch(`${API}/api/tareas/${tareaId}/`, {
 				method: 'PATCH',
 				credentials: 'include',
 				headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-				body: JSON.stringify(cuerpo),
+				body: JSON.stringify({ estado: nuevoEstado }),
 			});
-			if (!res.ok) {
-				const data = await res.json().catch(() => ({}));
-				const detalle = data.non_field_errors?.[0] || data.detail || Object.values(data)[0];
-				throw new Error(Array.isArray(detalle) ? detalle[0] : detalle || 'No se pudo actualizar la tarea.');
-			}
-			setError('');
+			if (!response.ok) throw new Error('No se pudo actualizar la subtarea.');
 			cargar();
-		} catch (e) {
-			setError(e instanceof TypeError ? 'No se pudo actualizar la tarea.' : e.message);
+		} catch (error) {
+			setError(error.message);
 		}
 	}
 
@@ -197,10 +194,13 @@ export default function Progreso() {
 				</Link>
 				<nav className="event-nav" aria-label="Navegación principal">
 					<Link to="/crear-evento">Crear evento</Link>
-					<span className="event-nav-current" aria-current="page">Mis eventos</span>
 					<Link to="/hoy">Hoy</Link>
+					<span className="event-nav-current" aria-current="page">Mis eventos</span>
 				</nav>
-				<span className="event-user-mark" aria-label="Tu perfil">EP</span>
+				<div className="event-user-actions">
+					<LogoutButton />
+					<span className="event-user-mark" aria-label="Tu perfil">EP</span>
+				</div>
 			</header>
 
 			<div className="prog-container">

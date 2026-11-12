@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './Hoy.css';
+import LogoutButton from '../LogoutButton';
 
 const API = 'http://127.0.0.1:8000';
 
@@ -71,10 +72,13 @@ export default function Hoy() {
 				</Link>
 				<nav className="event-nav" aria-label="Navegación principal">
 					<span className="event-nav-current" aria-current="page">Crear evento</span>
-					<Link to="/progreso">Mis eventos</Link>
 					<Link to="/hoy">Hoy</Link>
+					<Link to="/progreso">Mis eventos</Link>
 				</nav>
-				<span className="event-user-mark" aria-label="Tu perfil">EP</span>
+				<div className="event-user-actions">
+					<LogoutButton />
+					<span className="event-user-mark" aria-label="Tu perfil">EP</span>
+				</div>
 			</header>
 
 			<section className="event-intro" aria-labelledby="event-title">

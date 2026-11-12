@@ -2,8 +2,27 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import './Hoy.css';
 import './DetalleEvento.css';
+import LogoutButton from '../LogoutButton';
 
 const API = 'http://127.0.0.1:8000';
+
+function fechaLocalActual() { 
+	const hoy = new Date();
+	return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+}
+
+function calcularHorasDisponibles(tareas, fecha, limite, excluirTareaId = null) {
+	const ocupadas = tareas
+		.filter(tarea => tarea.fecha_asignada === fecha && tarea.id !== excluirTareaId)
+		.reduce((total, tarea) => total + Number(tarea.horas_estimadas), 0);
+	return Math.max(0, Number((Number(limite || 0) - ocupadas).toFixed(1)));
+}
+
+function limitarHoras(value, disponibles) {
+	const cantidad = Number(value);
+	if (!value || !Number.isFinite(cantidad) || cantidad <= disponibles) return null;
+	return String(Math.floor((disponibles + 1e-9) * 10) / 10);
+}
 
 const ESTADO_LABEL = {
 	PENDIENTE:   { label: 'PENDIENTE',   cls: 'badge-proxima' },
@@ -12,63 +31,67 @@ const ESTADO_LABEL = {
 	POSPUESTO:   { label: 'POSPUESTO',   cls: 'badge-pospuesto' },
 };
 
-function TareaFila({ tarea, onEstado, onEliminar, onEditar }) {
+function TareaFila({ tarea, tareas, limiteHorasDiarias, onEstado, onEliminar, onEditar }) {
 	const { label, cls } = ESTADO_LABEL[tarea.estado] || ESTADO_LABEL.PENDIENTE;
 	const [editando, setEditando] = useState(false);
 	const [guardando, setGuardando] = useState(false);
+	const [avisoHoras, setAvisoHoras] = useState('');
 	const [form, setForm] = useState({
 		titulo: tarea.titulo,
 		fecha_asignada: tarea.fecha_asignada,
 		hora_asignada: tarea.hora_asignada || '',
-		horas_estimadas: String(Number(tarea.horas_estimadas)),
+		horas_estimadas: String(tarea.horas_estimadas),
+		note: tarea.note || '',
 	});
-	const [formError, setFormError] = useState('');
-	const [exito, setExito] = useState('');
+	const horasDisponibles = calcularHorasDisponibles(tareas, form.fecha_asignada, limiteHorasDiarias, tarea.id);
 
-	useEffect(() => {
-		if (!exito) return undefined;
-		const temporizador = setTimeout(() => setExito(''), 5000);
-		return () => clearTimeout(temporizador);
-	}, [exito]);
+	function cambiarCampo(event) {
+		const { name, value } = event.target;
+		const siguiente = { ...form, [name]: value };
+		setAvisoHoras('');
 
-	async function handleSubmit(event) {
-		event.preventDefault();
-		setGuardando(true);
-		setFormError('');
-		const horasAntes = Number(tarea.horas_estimadas);
-		const horasDespues = Number(form.horas_estimadas);
-		const mensaje = await onEditar(tarea.id, {
-			...form,
-			titulo: form.titulo.trim(),
-			horas_estimadas: horasDespues,
-		});
-		setGuardando(false);
-		if (mensaje) {
-			setFormError(mensaje);
-			return;
+		if (name === 'fecha_asignada' || name === 'horas_estimadas') { 
+			const fecha = name === 'fecha_asignada' ? value : form.fecha_asignada;
+			const horas = name === 'horas_estimadas' ? value : form.horas_estimadas;
+			const disponibles = calcularHorasDisponibles(tareas, fecha, limiteHorasDiarias, tarea.id);
+			const ajustadas = fecha && limitarHoras(horas, disponibles);
+			if (ajustadas !== null) {
+				siguiente.horas_estimadas = ajustadas;
+				setAvisoHoras(`No se puede superar el límite diario. Actualmente tienes ${disponibles.toFixed(1)} horas disponibles; ajusté el valor a ${ajustadas} h.`);
+			}
 		}
-		setEditando(false);
-		if (horasDespues < horasAntes) {
-			setExito(`Horas reducidas con éxito: de ${horasAntes} h a ${horasDespues} h.`);
-		} else if (horasDespues > horasAntes) {
-			setExito(`Horas actualizadas con éxito: de ${horasAntes} h a ${horasDespues} h.`);
-		} else {
-			setExito('Subtarea actualizada con éxito.');
-		}
+
+		setForm(siguiente);
 	}
 
 	function alternarEdicion() {
 		if (!editando) {
-			// Al abrir, partir siempre de los valores guardados actualmente
+			const disponibles = calcularHorasDisponibles(tareas, tarea.fecha_asignada, limiteHorasDiarias, tarea.id);
+			const horasAjustadas = limitarHoras(String(tarea.horas_estimadas), disponibles);
 			setForm({
 				titulo: tarea.titulo,
 				fecha_asignada: tarea.fecha_asignada,
 				hora_asignada: tarea.hora_asignada || '',
-				horas_estimadas: String(Number(tarea.horas_estimadas)),
+				horas_estimadas: horasAjustadas ?? String(tarea.horas_estimadas),
+				note: tarea.note || '',
 			});
-			setFormError('');
+			setAvisoHoras(horasAjustadas === null ? '' : `No se puede superar el límite diario. Actualmente tienes ${disponibles.toFixed(1)} horas disponibles; ajusté el valor a ${horasAjustadas} h.`);
 		}
-		setEditando(value => !value);
+		setEditando(!editando);
+	}
+
+	async function handleSubmit(event) {
+		event.preventDefault();
+		setGuardando(true);
+		const cambios = {
+			...form,
+			titulo: form.titulo.trim(),
+			horas_estimadas: Number(form.horas_estimadas),
+		};
+		if (form.fecha_asignada === tarea.fecha_asignada) delete cambios.fecha_asignada;
+		const actualizado = await onEditar(tarea.id, cambios);
+		setGuardando(false);
+		if (actualizado) setEditando(false);
 	}
 
 	return (
@@ -79,10 +102,20 @@ function TareaFila({ tarea, onEstado, onEliminar, onEditar }) {
 					<span className="det-tarea-meta">
 						📅 {tarea.fecha_asignada}{tarea.hora_asignada && ` · ${tarea.hora_asignada.slice(0, 5)}`} · ⏱ {tarea.horas_estimadas}h · {tarea.prioridad}
 					</span>
+					{tarea.estado === 'HECHO' && (
+						<span className="det-tarea-finalizada">
+							Completada {tarea.done_at
+								? `el ${new Date(tarea.done_at).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}`
+								: '(fecha no registrada)'}
+						</span>
+					)}
+					{tarea.estado === 'POSPUESTO' && tarea.note && (
+						<span className="det-tarea-nota">Motivo del aplazamiento: {tarea.note}</span>
+					)}
 				</div>
 				<span className={`prog-badge ${cls}`}>{label}</span>
 				<div className="det-tarea-actions">
-					<button className="prog-action" onClick={alternarEdicion} type="button" title={editando ? 'Cerrar el formulario sin guardar' : 'Cambiar el nombre, fecha, hora o las horas de esta subtarea'}>
+					<button className="prog-action" onClick={alternarEdicion} type="button" title={editando ? 'Cerrar el formulario sin guardar' : 'Editar los datos y las horas de esta subtarea'}>
 						{editando ? 'Cancelar' : 'Editar'}
 					</button>
 					{tarea.estado !== 'HECHO' && (
@@ -95,8 +128,18 @@ function TareaFila({ tarea, onEstado, onEliminar, onEditar }) {
 							↻ En progreso
 						</button>
 					)}
+					{tarea.estado === 'POSPUESTO' && (
+						<button className="prog-action" onClick={() => onEstado(tarea.id, 'EN_PROGRESO')} title="Reanudar esta subtarea">
+							↻ Reanudar
+						</button>
+					)}
+					{tarea.estado !== 'HECHO' && tarea.estado !== 'POSPUESTO' && (
+						<button className="prog-action" onClick={() => onEstado(tarea.id, 'POSPUESTO')} title="Posponer esta subtarea">
+							↷ Posponer
+						</button>
+					)}
 					<button className="prog-action prog-action-icon det-btn-eliminar" onClick={() => onEliminar(tarea.id)} title="Eliminar esta subtarea">
-						✕
+						<span aria-hidden="true">🗑</span>
 					</button>
 				</div>
 			</div>
@@ -105,23 +148,28 @@ function TareaFila({ tarea, onEstado, onEliminar, onEditar }) {
 					<div className="det-form-grid">
 						<label className="det-label">
 							Nombre de la subtarea
-							<input className="det-input" maxLength={200} onChange={event => setForm({ ...form, titulo: event.target.value })} required value={form.titulo} />
+							<input className="det-input" maxLength={200} onChange={cambiarCampo} required name="titulo" value={form.titulo} />
 						</label>
 						<label className="det-label">
 							Fecha
-							<input className="det-input" onChange={event => setForm({ ...form, fecha_asignada: event.target.value })} required type="date" value={form.fecha_asignada} />
+							<input className="det-input" min={tarea.fecha_asignada < fechaLocalActual() ? undefined : fechaLocalActual()} name="fecha_asignada" onChange={cambiarCampo} required type="date" value={form.fecha_asignada} />
 						</label>
 						<label className="det-label">
 							Hora
-							<input className="det-input" onChange={event => setForm({ ...form, hora_asignada: event.target.value })} type="time" value={form.hora_asignada} />
+							<input className="det-input" name="hora_asignada" onChange={cambiarCampo} type="time" value={form.hora_asignada} />
 						</label>
 						<label className="det-label">
 							Horas estimadas
-							<input className="det-input" max="24" min="0.5" onChange={event => setForm({ ...form, horas_estimadas: event.target.value })} required step="0.5" type="number" value={form.horas_estimadas} />
+							<input className="det-input" max={horasDisponibles} min="0.1" name="horas_estimadas" onChange={cambiarCampo} required step="0.1" type="number" value={form.horas_estimadas} />
+							<span className="det-form-hint">Horas disponibles para esta fecha: {horasDisponibles.toFixed(1)} h</span>
+						</label>
+						<label className="det-label">
+							Nota de seguimiento
+							<textarea className="det-input det-textarea" maxLength={2000} name="note" onChange={cambiarCampo} rows="3" value={form.note} />
 						</label>
 					</div>
-					{formError && <p className="det-form-error" role="alert">{formError}</p>}
-					<button className="prog-action prog-action-primary" disabled={guardando} type="submit" title="Guardar los cambios de la subtarea">
+					{avisoHoras && <p className="det-form-warning" role="status">{avisoHoras}</p>}
+					<button className="prog-action prog-action-primary" disabled={guardando || horasDisponibles < 0.1} type="submit" title="Guardar los cambios de la subtarea">
 						{guardando ? 'Guardando…' : 'Guardar cambios'}
 					</button>
 				</form>
@@ -139,11 +187,11 @@ export default function DetalleEvento() {
 	const [error, setError] = useState('');
 	const [form, setForm] = useState(FORM_INICIAL);
 	const [formError, setFormError] = useState('');
+	const [avisoHoras, setAvisoHoras] = useState('');
 	const [guardando, setGuardando] = useState(false);
-	const [confirmacion, setConfirmacion] = useState(null);
 	const [abrirForm, setAbrirForm] = useState(false);
 	const [editarEvento, setEditarEvento] = useState(false);
-	const [formEvento, setFormEvento] = useState({ nombre: '', fecha_evento: '', hora_evento: '' });
+	const [formEvento, setFormEvento] = useState({ nombre: '', fecha_evento: '', hora_evento: '', limite_horas_diarias: 6 });
 
 	const cargar = useCallback(async () => {
 		setCargando(true);
@@ -163,9 +211,22 @@ export default function DetalleEvento() {
 
 	function handleChange(e) {
 		const { name, value } = e.target;
-		setForm(prev => ({ ...prev, [name]: value }));
+		const siguiente = { ...form, [name]: value };
+		setAvisoHoras('');
+
+		if (name === 'fecha_asignada' || name === 'horas_estimadas') {
+			const fecha = name === 'fecha_asignada' ? value : form.fecha_asignada;
+			const horas = name === 'horas_estimadas' ? value : form.horas_estimadas;
+			const disponibles = calcularHorasDisponibles(evento?.tareas || [], fecha, evento?.limite_horas_diarias);
+			const ajustadas = limitarHoras(horas, disponibles);
+			if (ajustadas !== null) {
+				siguiente.horas_estimadas = ajustadas;
+				setAvisoHoras(`No se puede superar el límite diario. Actualmente tienes ${disponibles.toFixed(1)} horas disponibles; ajusté el valor a ${ajustadas} h.`);
+			}
+		}
+
+		setForm(siguiente);
 		setFormError('');
-		setConfirmacion(null);
 	}
 
 	async function handleEditarEvento(e) {
@@ -176,15 +237,19 @@ export default function DetalleEvento() {
 		try {
 			const csrfRes = await fetch(`${API}/api/auth/csrf/`, { credentials: 'include' });
 			const { csrfToken } = await csrfRes.json();
+			const datosEvento = {
+				nombre: formEvento.nombre.trim(),
+				hora_evento: formEvento.hora_evento || null,
+				limite_horas_diarias: Number(formEvento.limite_horas_diarias),
+			};
+			if (formEvento.fecha_evento !== (evento.fecha_evento || '')) {
+				datosEvento.fecha_evento = formEvento.fecha_evento || null;
+			}
 			const res = await fetch(`${API}/api/eventos/${id}/`, {
 				method: 'PATCH',
 				credentials: 'include',
 				headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-				body: JSON.stringify({
-					nombre: formEvento.nombre.trim(),
-					fecha_evento: formEvento.fecha_evento || null,
-					hora_evento: formEvento.hora_evento || null,
-				}),
+				body: JSON.stringify(datosEvento),
 			});
 			if (!res.ok) throw new Error('No se pudo actualizar el evento.');
 			setEditarEvento(false);
@@ -196,31 +261,13 @@ export default function DetalleEvento() {
 		}
 	}
 
-	function handleAgregarTarea(e) {
+	async function handleAgregarTarea(e) {
 		e.preventDefault();
 		if (!form.titulo.trim()) return setFormError('Escribe un nombre para la tarea.');
 		if (!form.fecha_asignada)  return setFormError('Selecciona una fecha.');
 		if (!form.horas_estimadas || Number(form.horas_estimadas) <= 0)
 			return setFormError('Ingresa las horas estimadas.');
 
-		// Mismo criterio que el backend: suma de horas de todas las tareas del evento en esa fecha.
-		const limite = Number(evento?.limite_horas_diarias ?? 0);
-		const horas = Number(form.horas_estimadas);
-		const ocupadas = (evento?.tareas || [])
-			.filter(t => t.fecha_asignada === form.fecha_asignada)
-			.reduce((suma, t) => suma + Number(t.horas_estimadas), 0);
-		const disponibles = Math.max(0, limite - ocupadas);
-		const base = { fecha: form.fecha_asignada, limite, ocupadas, disponibles, horas };
-
-		setFormError('');
-		if (ocupadas + horas > limite) {
-			setConfirmacion({ tipo: 'excedido', ...base });
-		} else {
-			setConfirmacion({ tipo: 'ok', ...base, restantes: limite - ocupadas - horas });
-		}
-	}
-
-	async function guardarTarea() {
 		setGuardando(true);
 		setFormError('');
 		try {
@@ -248,18 +295,15 @@ export default function DetalleEvento() {
 				throw new Error(msg);
 			}
 			setForm(FORM_INICIAL);
-			setConfirmacion(null);
 			setAbrirForm(false);
 			cargar();
 		} catch (err) {
-			setConfirmacion(null);
 			setFormError(err.message);
 		} finally {
 			setGuardando(false);
 		}
 	}
 
-	// Devuelve null si se guardó, o el mensaje de error para mostrarlo en el formulario de la subtarea.
 	async function handleEditarTarea(tareaId, cambios) {
 		try {
 			const csrfRes = await fetch(`${API}/api/auth/csrf/`, { credentials: 'include' });
@@ -270,15 +314,12 @@ export default function DetalleEvento() {
 				headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
 				body: JSON.stringify({ ...cambios, hora_asignada: cambios.hora_asignada || null }),
 			});
-			if (!res.ok) {
-				const data = await res.json().catch(() => ({}));
-				const detalle = data.non_field_errors?.[0] || data.detail || Object.values(data)[0];
-				return (Array.isArray(detalle) ? detalle[0] : detalle) || 'No se pudo actualizar la subtarea.';
-			}
+			if (!res.ok) throw new Error('No se pudo actualizar la subtarea.');
 			await cargar();
-			return null;
-		} catch {
-			return 'No se pudo conectar con el servidor.';
+			return true;
+		} catch (err) {
+			setError(err.message);
+			return false;
 		}
 	}
 
@@ -311,6 +352,7 @@ export default function DetalleEvento() {
 	}
 
 	const tareas = evento?.tareas || [];
+	const horasDisponiblesNueva = calcularHorasDisponibles(tareas, form.fecha_asignada, evento?.limite_horas_diarias);
 	const hechas = tareas.filter(t => t.estado === 'HECHO').length;
 	const pct = tareas.length > 0 ? Math.round((hechas / tareas.length) * 100) : 0;
 
@@ -323,10 +365,13 @@ export default function DetalleEvento() {
 				</Link>
 				<nav className="event-nav" aria-label="Navegación principal">
 					<Link to="/crear-evento">Crear evento</Link>
-					<span className="event-nav-current" aria-current="page">Mis eventos</span>
 					<Link to="/hoy">Hoy</Link>
+					<span className="event-nav-current" aria-current="page">Mis eventos</span>
 				</nav>
-				<span className="event-user-mark" aria-label="Tu perfil">EP</span>
+				<div className="event-user-actions">
+					<LogoutButton />
+					<span className="event-user-mark" aria-label="Tu perfil">EP</span>
+				</div>
 			</header>
 
 			<div className="det-container">
@@ -358,7 +403,12 @@ export default function DetalleEvento() {
 									className="prog-action det-btn-nueva"
 									title="Editar el nombre, fecha y hora del evento"
 									onClick={() => {
-										setFormEvento({ nombre: evento.nombre, fecha_evento: evento.fecha_evento || '', hora_evento: evento.hora_evento || '' });
+										setFormEvento({
+											nombre: evento.nombre,
+											fecha_evento: evento.fecha_evento || '',
+											hora_evento: evento.hora_evento || '',
+											limite_horas_diarias: evento.limite_horas_diarias,
+										});
 										setEditarEvento(value => !value);
 									}}
 									type="button"
@@ -386,11 +436,24 @@ export default function DetalleEvento() {
 									</label>
 									<label className="det-label">
 										Fecha
-										<input className="det-input" onChange={e => setFormEvento({ ...formEvento, fecha_evento: e.target.value })} type="date" value={formEvento.fecha_evento} />
+										<input className="det-input" min={evento.fecha_evento && evento.fecha_evento < fechaLocalActual() ? undefined : fechaLocalActual()} onChange={e => setFormEvento({ ...formEvento, fecha_evento: e.target.value })} type="date" value={formEvento.fecha_evento} />
 									</label>
 									<label className="det-label">
 										Hora
 										<input className="det-input" onChange={e => setFormEvento({ ...formEvento, hora_evento: e.target.value })} type="time" value={formEvento.hora_evento} />
+									</label>
+									<label className="det-label">
+										Límite de horas al día
+										<input
+											className="det-input"
+											max="24"
+											min="1"
+											onChange={e => setFormEvento({ ...formEvento, limite_horas_diarias: e.target.value })}
+											required
+											step="1"
+											type="number"
+											value={formEvento.limite_horas_diarias}
+										/>
 									</label>
 								</div>
 								{formError && <p className="det-form-error" role="alert">{formError}</p>}
@@ -432,6 +495,7 @@ export default function DetalleEvento() {
 										<input
 											className="det-input"
 											type="date"
+											min={fechaLocalActual()}
 											name="fecha_asignada"
 											value={form.fecha_asignada}
 											onChange={handleChange}
@@ -446,12 +510,15 @@ export default function DetalleEvento() {
 											name="horas_estimadas"
 											value={form.horas_estimadas}
 											onChange={handleChange}
-											min="0.5"
-											max="24"
-											step="0.5"
+											min="0.1"
+											max={horasDisponiblesNueva}
+											step="0.1"
 											placeholder="Ej. 2"
 											required
 										/>
+										<span className="det-form-hint">
+											Horas disponibles para esta fecha: {horasDisponiblesNueva.toFixed(1)} h
+										</span>
 									</label>
 									<label className="det-label">
 										Hora objetivo
@@ -477,58 +544,17 @@ export default function DetalleEvento() {
 										</select>
 									</label>
 								</div>
+								{avisoHoras && <p className="det-form-warning" role="status">{avisoHoras}</p>}
+								{form.fecha_asignada && horasDisponiblesNueva < 0.1 && <p className="det-form-warning" role="status">No quedan horas disponibles para esta fecha. Elige otra fecha.</p>}
 								{formError && <p className="det-form-error" role="alert">{formError}</p>}
-								{confirmacion?.tipo === 'ok' && (
-									<div className="det-confirm det-confirm-ok" role="alertdialog" aria-live="polite">
-										<p>
-											<strong>¿Agregar «{form.titulo.trim()}»?</strong><br />
-											El {confirmacion.fecha} tienes {confirmacion.disponibles} h libres de {confirmacion.limite} h.
-											Con esta tarea ({confirmacion.horas} h) te quedarán {confirmacion.restantes} h.
-										</p>
-										<div className="det-confirm-actions">
-											<button className="prog-action" type="button" onClick={() => setConfirmacion(null)} disabled={guardando}>Cancelar</button>
-											<button className="prog-action prog-action-primary" type="button" onClick={guardarTarea} disabled={guardando}>
-												{guardando ? 'Guardando…' : 'Sí, agregar'}
-											</button>
-										</div>
-									</div>
-								)}
-								{confirmacion?.tipo === 'excedido' && (
-									<div className="det-confirm det-confirm-warn" role="alert">
-										<p>
-											<strong>No hay horas suficientes ese día.</strong><br />
-											El {confirmacion.fecha} ya tienes {confirmacion.ocupadas} h ocupadas de {confirmacion.limite} h
-											(libres: {confirmacion.disponibles} h) y esta tarea necesita {confirmacion.horas} h.
-											Cambia el día o disminuye las horas
-											{confirmacion.disponibles > 0 ? ` a ${confirmacion.disponibles} h o menos.` : '.'}
-										</p>
-										<div className="det-confirm-actions">
-											<button className="prog-action" type="button" onClick={() => setConfirmacion(null)}>Entendido</button>
-											{confirmacion.disponibles > 0 && (
-												<button
-													className="prog-action prog-action-primary"
-													type="button"
-													onClick={() => {
-														setForm(prev => ({ ...prev, horas_estimadas: String(confirmacion.disponibles) }));
-														setConfirmacion(null);
-													}}
-												>
-													Usar {confirmacion.disponibles} h
-												</button>
-											)}
-										</div>
-									</div>
-								)}
-								{!confirmacion && (
-									<button
-										className="continue-button det-btn-guardar"
-										title="Guardar y agregar esta subtarea al evento"
-										type="submit"
-										disabled={guardando}
-									>
-										{guardando ? 'Guardando…' : 'Agregar tarea →'}
-									</button>
-								)}
+								<button
+									className="continue-button det-btn-guardar"
+									title="Guardar y agregar esta subtarea al evento"
+									type="submit"
+									disabled={guardando || (Boolean(form.fecha_asignada) && horasDisponiblesNueva < 0.1)}
+								>
+									{guardando ? 'Guardando…' : 'Agregar tarea →'}
+								</button>
 							</form>
 						)}
 
@@ -557,6 +583,8 @@ export default function DetalleEvento() {
 									<TareaFila
 										key={t.id}
 										tarea={t}
+										tareas={tareas}
+										limiteHorasDiarias={evento.limite_horas_diarias}
 										onEstado={handleEstado}
 										onEliminar={handleEliminar}
 										onEditar={handleEditarTarea}

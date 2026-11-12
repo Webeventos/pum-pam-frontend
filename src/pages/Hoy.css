@@ -61,6 +61,53 @@
   font-size: 20px;
 }
 
+.event-user-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 10px;
+}
+
+.event-logout {
+  padding: 7px 0;
+  border: 0;
+  color: #51645a;
+  background: transparent;
+  cursor: pointer;
+  font: 700 12px 'Trebuchet MS', 'Segoe UI', sans-serif;
+  white-space: nowrap;
+}
+
+.event-logout:hover:not(:disabled) {
+  color: #a33c32;
+  text-decoration: underline;
+}
+
+.event-logout:focus-visible {
+  outline: 2px solid #f3a07c;
+  outline-offset: 3px;
+}
+
+.event-logout:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.event-logout-error {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  z-index: 101;
+  padding: 5px 8px;
+  border: 1px solid #f0d4d1;
+  border-radius: 4px;
+  color: #a33c32;
+  background: #fffefa;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .event-nav {
   display: flex;
   align-items: center;
@@ -81,9 +128,12 @@
 .event-nav-current {
   display: grid;
   height: 100%;
+  padding: 0 10px;
   place-items: center;
-  border-bottom: 2px solid var(--event-green);
+  border-bottom: 3px solid var(--event-green);
+  border-radius: 4px 4px 0 0;
   color: var(--event-green);
+  background: #e8f2e3;
   font-weight: 700;
 }
 
@@ -703,7 +753,8 @@
 
   .event-nav { grid-column: 1 / -1; grid-row: 2; height: 39px; gap: 24px; }
   .event-nav a, .event-nav-current { height: 39px; }
-  .event-user-mark { grid-column: 2; grid-row: 1; }
+  .event-user-actions { grid-column: 2; grid-row: 1; gap: 7px; }
+  .event-logout { font-size: 11px; }
   .event-intro { min-height: 237px; padding: 30px 23px; }
   .event-intro h1 { font-size: 43px; }
   .event-intro-text { max-width: 250px; font-size: 12px; }

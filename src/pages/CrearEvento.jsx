@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import './Hoy.css';
+import LogoutButton from '../LogoutButton';
 
 const tiposEvento = {
 	cumpleanos: 'Cumpleaños',
@@ -12,6 +13,11 @@ const tiposEvento = {
 	corporativo: 'Evento corporativo',
 	otro: 'Otra ocasión',
 };
+
+function fechaLocalActual() {
+	const hoy = new Date();
+	return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+}
 
 export default function CrearEvento() {
 	const [searchParams] = useSearchParams();
@@ -54,7 +60,8 @@ export default function CrearEvento() {
 			const result = await response.json().catch(() => ({}));
 
 			if (!response.ok) {
-				throw new Error(result.detail || 'No se pudo guardar el evento. Inténtalo de nuevo.');
+				const fieldError = Object.values(result).flat().find(value => typeof value === 'string');
+				throw new Error(fieldError || result.detail || 'No se pudo guardar el evento. Inténtalo de nuevo.');
 			}
 
 			setEventoCreado(result.nombre || nombre.trim());
@@ -77,10 +84,13 @@ export default function CrearEvento() {
 				</Link>
 				<nav className="event-nav" aria-label="Navegación principal">
 					<span className="event-nav-current" aria-current="page">Crear evento</span>
-					<Link to="/progreso">Mis eventos</Link>
 					<Link to="/hoy">Hoy</Link>
+					<Link to="/progreso">Mis eventos</Link>
 				</nav>
-				<span className="event-user-mark" aria-label="Tu perfil">EP</span>
+				<div className="event-user-actions">
+					<LogoutButton />
+					<span className="event-user-mark" aria-label="Tu perfil">EP</span>
+				</div>
 			</header>
 
 			<section className="create-event-main">
@@ -127,6 +137,7 @@ export default function CrearEvento() {
 								<input
 									id="event-date"
 									name="fecha_evento"
+									min={fechaLocalActual()}
 									onChange={(event) => setFechaEvento(event.target.value)}
 									type="date"
 									value={fechaEvento}

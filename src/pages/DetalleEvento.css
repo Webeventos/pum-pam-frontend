@@ -152,6 +152,18 @@ select.det-input { cursor: pointer; }
   font-size: 13px;
 }
 
+.det-form-hint {
+  color: #718077;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.det-form-warning {
+  margin: 0 0 10px;
+  color: #9a5a08;
+  font-size: 13px;
+}
+
 .det-btn-guardar {
   width: 100%;
   justify-content: center;
@@ -219,6 +231,26 @@ select.det-input { cursor: pointer; }
   font-size: 11px;
 }
 
+.det-tarea-finalizada {
+  display: block;
+  margin-top: 4px;
+  color: #387454;
+  font-size: 11px;
+}
+
+.det-tarea-nota {
+  display: block;
+  margin-top: 4px;
+  color: #7a5c1e;
+  font-size: 11px;
+}
+
+.det-textarea {
+  min-height: 82px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
 .det-tarea-actions {
   display: flex;
   align-items: center;
@@ -259,10 +291,3 @@ select.det-input { cursor: pointer; }
   .det-tarea { flex-wrap: wrap; }
   .det-titulo { font-size: 28px; }
 }
-
-/* ── Confirmación de nueva tarea ── */
-.det-confirm { margin-top: 14px; padding: 14px 16px; border-radius: 8px; font-size: 13px; line-height: 1.5; }
-.det-confirm p { margin: 0 0 12px; }
-.det-confirm-ok { color: #1f4d38; background: #eef5eb; border: 1px solid #c8d9c2; }
-.det-confirm-warn { color: #7a3b12; background: #fdf3e6; border: 1px solid #f0cfa4; }
-.det-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }

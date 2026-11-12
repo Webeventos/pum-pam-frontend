@@ -1,27 +1,55 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import './Hoy.css';
+import './Progreso.css';
+import LogoutButton from '../LogoutButton';
 
 const API = 'http://127.0.0.1:8000';
 
+function describirNovedad(novedad) {
+  switch (novedad.tipo) {
+    case 'EVENTO_CREADO':
+      return `Evento creado: ${novedad.evento_nombre}`;
+    case 'EVENTO_EDITADO':
+      return `Evento editado: ${novedad.evento_nombre}`;
+    case 'SUBTAREA_AGREGADA':
+      return `Subtarea agregada: ${novedad.subtarea_titulo} · ${novedad.evento_nombre}`;
+    case 'SUBTAREA_COMPLETADA':
+      return `Subtarea completada: ${novedad.subtarea_titulo} · ${novedad.evento_nombre}`;
+    default:
+      return novedad.evento_nombre;
+  }
+}
+
 export default function HoyEventos() {
   const [eventos, setEventos] = useState([]);
+  const [novedades, setNovedades] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
+  const [errorNovedades, setErrorNovedades] = useState('');
 
   const cargar = useCallback(async () => {
     setCargando(true);
     setError('');
-    try {
-      const res = await fetch(`${API}/api/eventos/`, { credentials: 'include' });
-      if (!res.ok) throw new Error('No se pudo cargar los eventos.');
-      const data = await res.json();
-      setEventos(data);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setCargando(false);
-    }
+    setErrorNovedades('');
+    const resultados = await Promise.allSettled([
+      fetch(`${API}/api/eventos/`, { credentials: 'include' }).then(res => {
+        if (!res.ok) throw new Error('No se pudo cargar los eventos.');
+        return res.json();
+      }),
+      fetch(`${API}/api/novedades/`, { credentials: 'include' }).then(res => {
+        if (!res.ok) throw new Error('No se pudieron cargar las novedades.');
+        return res.json();
+      }),
+    ]);
+
+    if (resultados[0].status === 'fulfilled') setEventos(resultados[0].value);
+    else setError(resultados[0].reason.message);
+
+    if (resultados[1].status === 'fulfilled') setNovedades(resultados[1].value);
+    else setErrorNovedades(resultados[1].reason.message);
+
+    setCargando(false);
   }, []);
 
   useEffect(() => {
@@ -47,10 +75,13 @@ export default function HoyEventos() {
         </Link>
         <nav className="event-nav" aria-label="Navegación principal">
           <Link to="/crear-evento">Crear evento</Link>
-          <Link to="/progreso">Mis eventos</Link>
           <span className="event-nav-current" aria-current="page">Hoy</span>
+          <Link to="/progreso">Mis eventos</Link>
         </nav>
-        <span className="event-user-mark" aria-label="Tu perfil">EP</span>
+        <div className="event-user-actions">
+          <LogoutButton />
+          <span className="event-user-mark" aria-label="Tu perfil">EP</span>
+        </div>
       </header>
 
       <div className="prog-container">
@@ -116,6 +147,37 @@ export default function HoyEventos() {
             ))}
           </div>
         )}
+
+        <section className="novedades-section" aria-labelledby="novedades-title">
+          <div className="novedades-heading">
+            <div>
+              <p className="prog-kicker">ACTIVIDAD RECIENTE</p>
+              <h2 id="novedades-title" className="novedades-title">Novedades</h2>
+            </div>
+          </div>
+          {cargando && <p className="novedades-empty">Cargando novedades…</p>}
+          {!cargando && errorNovedades && <p className="prog-estado-error" role="alert">{errorNovedades}</p>}
+          {!cargando && !errorNovedades && novedades.length === 0 && (
+            <p className="novedades-empty">Todavía no hay novedades recientes.</p>
+          )}
+          {!cargando && novedades.length > 0 && (
+            <ol className="novedades-lista">
+              {novedades.map(novedad => (
+                <li className="novedades-item" key={novedad.id}>
+                  <span className="novedades-marca" aria-hidden="true" />
+                  <div className="novedades-contenido">
+                    <Link to={`/evento/${novedad.evento}`} className="novedades-enlace">
+                      {describirNovedad(novedad)}
+                    </Link>
+                    <time className="novedades-fecha" dateTime={novedad.fecha}>
+                      {new Date(novedad.fecha).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}
+                    </time>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
       </div>
     </main>
   );

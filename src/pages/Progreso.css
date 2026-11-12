@@ -129,6 +129,13 @@
   margin-bottom: 14px;
 }
 
+.prog-barra-label {
+  margin: 0 0 6px;
+  color: #718077;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .prog-barra {
   flex: 1;
   height: 5px;
@@ -206,6 +213,79 @@
   font-style: italic;
 }
 
+.novedades-section {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid #e2e8df;
+}
+
+.novedades-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.novedades-title {
+  margin: 0;
+  color: #20392d;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 26px;
+  font-weight: 400;
+}
+
+.novedades-lista {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid #e8ede5;
+  list-style: none;
+}
+
+.novedades-item {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #e8ede5;
+}
+
+.novedades-marca {
+  width: 8px;
+  aspect-ratio: 1;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: #347554;
+}
+
+.novedades-contenido {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.novedades-enlace {
+  color: #263a31;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.novedades-enlace:hover {
+  color: #246b4d;
+  text-decoration: underline;
+}
+
+.novedades-fecha,
+.novedades-empty {
+  color: #879188;
+  font-size: 11px;
+}
+
+.novedades-empty {
+  margin: 12px 0;
+}
+
 /* ── Badges ── */
 .prog-badge {
   display: inline-block;
@@ -221,7 +301,15 @@
 .badge-hoy        { color: #fff;     background: #1a5ca8; }
 .badge-proxima    { color: #4a5e50;  background: #e3ece0; }
 .badge-hecho      { color: #387454;  background: #d8edd5; }
+.badge-pospuesto  { color: #7a5c1e;  background: #fdf0d5; }
 .badge-sin-tareas { color: #79837a;  background: #edeee9; }
+
+.prog-tarea-nota {
+  display: block;
+  margin-top: 4px;
+  color: #7a5c1e;
+  font-size: 11px;
+}
 
 /* ── Botones de acción ── */
 .prog-action {
